@@ -7,6 +7,11 @@ from mujoco.XML import XML
 import mujoco.contacts as contacts
 import utils
 
+# modified line
+import numpy as np
+from PIL import Image
+
+
 class Logger:
 
   def __init__(self, xml, sim, steps = 100, img_dim = 64, albedo = False):
@@ -65,7 +70,8 @@ class Logger:
     image = self.sim.render(self.render_dim, self.render_dim, camera_name = camera)
     self.undo_transparent()
     if self.img_dim != self.render_dim:
-      image = scipy.misc.imresize(image, size = (self.img_dim, self.img_dim)).astype(np.uint8)
+      image = np.array(Image.fromarray(image).resize(size = (self.img_dim, self.img_dim))).astype(np.uint8)
+      #image = scipy.misc.imresize(image, size = (self.img_dim, self.img_dim)).astype(np.uint8)
 
     if 'images' not in dir(self):
       M, N, C = image.shape
@@ -92,7 +98,8 @@ class Logger:
 
     image = self.sim.render(self.render_dim, self.render_dim, camera_name = camera)
     if self.img_dim != self.render_dim:
-      image = scipy.misc.imresize(image, size = (self.img_dim, self.img_dim))
+      image = np.array(Image.fromarray(image).resize(size = (self.img_dim, self.img_dim)))
+      # image = scipy.misc.imresize(image, size = (self.img_dim, self.img_dim))
 
     self.albedo[step] = image
 
@@ -130,7 +137,8 @@ class Logger:
 
       image = self.sim.render(self.render_dim, self.render_dim, camera_name = camera)
       if self.img_dim != self.render_dim:
-        image = scipy.misc.imresize(image, size = (self.img_dim, self.img_dim))
+        image = np.array(Image.fromarray(image).resize(size = (self.img_dim, self.img_dim)))
+        # image = scipy.misc.imresize(image, size = (self.img_dim, self.img_dim))
 
       self.masks[mesh][step] = image > 0.5
 
