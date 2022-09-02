@@ -30,15 +30,12 @@ class XML:
     </visual>
 
    <worldbody>
-      <camera name='fixed' pos='0 5 1' euler='-1.57 0 0'/>
+      <camera name='cam1' pos='0 10 1' euler='-1.57 0 0'/>
       <light diffuse='1.5 1.5 1.5' pos='0 4 4' dir='0 -1 0'/>  
       <light diffuse='1.5 1.5 1.5' pos='0 4 1' dir='0 -1 0'/>  
       
-      <geom name='wall_left'  type='box' pos='-3 -1 0' euler='0 0 0' size='0.1 2 4' material='wall_invisible'/>
-      <geom name='wall_right'  type='box' pos='-3 -1 0' euler='0 0 0' size='0.1 2 4' material='wall_invisible'/>
-      <geom name='wall_back'  type='box' pos='0 -4 2' euler='0 0 0' size='4 0.1 4' material='wall_invisible'/>
-      <geom name='wall_floor'  type='plane' pos='0 0 -.5' euler='0 0 0' size='5 5 0.1' material='wall_visible'/>
-
+      <geom name='preparing_table'  type='plane' pos='0 -5 0' euler='0 0 0' size='5 5 0.1' material='wall_visible'/>
+      <geom name='wall_floor'  type='plane' pos='0 0 0' euler='0 0 0' size='5 5 0.1' material='wall_visible'/>
       {}
 
    </worldbody>

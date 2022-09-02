@@ -28,7 +28,9 @@ parser.add_argument('--output_path', default='rendered/test/', type=str,
         help='path to save images')
 
 parser.add_argument('--drop_steps_max', default=500, type=int,
-        help='max number of steps simulating dropped object')
+        help='max number of steps simulating dropping one object')
+parser.add_argument('--total_steps_max', default=5000, type=int,
+        help='max number of total steps simulating one scene')
 parser.add_argument('--render_freq', default=25, type=int,
         help='frequency of image saves in drop simulation')
 
@@ -58,7 +60,7 @@ num_objects = range(args.min_objects, args.max_objects + 1)
 
 ## bounds for objects that start on the ground plane
 settle_bounds = {  
-            'pos':   [ [-.5, .5], [-.5, 0], [1, 2] ],
+            'pos':   [ [-.5, .5], [-5.5, -4.5], [1.5, 2] ],
             'hsv': [ [0, 1], [0.5, 1], [0.5, 1] ],
             'scale': [ [0.4, 0.4] ],
             'force': [ [0, 0], [0, 0], [0, 0] ]
@@ -74,57 +76,30 @@ asset_path = os.path.join(os.getcwd(), 'assets/stl/')
 
 utils.mkdir(args.output_path)
 
-metadata = {'polygons': polygons, 'max_steps': args.drop_steps_max, 
+metadata = {'polygons': polygons, 'max_steps_per_drop': args.drop_steps_max, 
+            'max_total_steps': args.total_steps_max,
             'min_objects': min(num_objects), 
             'max_objects': max(num_objects)}
 pickle.dump( metadata, open(os.path.join(args.output_path, 'metadata.p'), 'wb') )
 
-num_images_per_scene = math.ceil(args.drop_steps_max / args.render_freq)
+# number of frames rendered in total for a scene
+num_images_per_scene = math.ceil(args.settle_steps_max * 2 / args.render_freq + 1)
 end = args.start + args.num_images
 for img_num in tqdm.tqdm( range(args.start, end) ):
 
-    sim, xml, drop_name = contacts.sample_settled(asset_path, num_objects, polygons, settle_bounds)
+    step = 0
+
+    ## initiate the sim and settle the blocks on the first floor
+    sim, xml, names = contacts.sample_settled(asset_path, num_objects, polygons, settle_bounds)
+
+    ## initiate the logger, which is used to log data and images
     logger = Logger(xml, sim, steps = num_images_per_scene, img_dim = args.img_dim )
     
-    ## drop all objects except [ drop_name ]
-    logger.settle_sim(drop_name, args.settle_steps_min, args.settle_steps_max)
+    ## drop all objects to the preparing table
+    step = logger.settle_sim(args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
 
-    ## filter scenes in which objects are intersecting
-    ## because it makes the physics unpredictable
-    overlapping = True
-    while overlapping:
-
-        ## get position for drop block
-        if random.uniform(0, 1) < 0.5 and len(xml.meshes) > 1:
-            ## some hard-coded messiness
-            ## to drop a block directly on top
-            ## of an existnig block half of the time
-            mesh = random.choice(xml.meshes)
-            pos = [float(p) for p in mesh['pos'].split(' ')]
-            pos[2] += random.uniform(.4, .8)
-        else:
-            ## drop on random position
-            pos = utils.uniform(*drop_bounds['pos'])
-
-        ## get orientation for drop block
-        if 'horizontal' in drop_name:
-            axangle = [1,0,0,0]
-        else:
-            axis = [0,0,1]
-            axangle  = utils.random_axangle(axis=axis)
-
-        ## position and orient the block
-        logger.position_body(drop_name, pos, axangle)
-
-        ## check whether there are any block intersections
-        overlapping = contacts.is_overlapping(sim, drop_name)
-
-    for i in range(args.drop_steps_max):
-        ## log every [ render_freq ] steps
-        if i % args.render_freq == 0:
-            logger.log(i//args.render_freq)
-        ## simulate one timestep
-        sim.step()
+    drop_name = random.choice(names)
+    step = logger.drop_obj(drop_name, [0,0,5,0,0,0,0], args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
     
     data, images, masks = logger.get_logs()
 
@@ -138,7 +113,7 @@ for img_num in tqdm.tqdm( range(args.start, end) ):
 
     config_path  = os.path.join( args.output_path, '{}.p'.format(img_num) )
 
-    config = {'data': data, 'images': images, 'masks': masks, 'drop_name': drop_name}
+    config = {'data': data, 'images': images, 'masks': masks}
 
     pickle.dump( config, open(config_path, 'wb') )
 

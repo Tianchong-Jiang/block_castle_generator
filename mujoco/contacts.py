@@ -9,13 +9,13 @@ import utils as utils
 
 def sample_settled(asset_path, num_objects, polygons, bounds, spacing = 1):
     xml = XML(asset_path)
-    num_settled = [i-1 for i in num_objects if i-1 >= 0] 
-    num_set = random.choice(num_settled)
+    num_set = max(num_objects)
+    names = []
 
     for obj_num in range(num_set):
         ply = random.choice(polygons)
 
-        pos   = utils.uniform(*bounds['pos'])
+        pos = utils.uniform(*bounds['pos'])
         pos[-1] = spacing * (obj_num)
 
         if 'horizontal' in ply:
@@ -26,18 +26,13 @@ def sample_settled(asset_path, num_objects, polygons, bounds, spacing = 1):
         scale = utils.uniform(*bounds['scale'])
         rgba = sample_rgba_from_hsv(*bounds['hsv'])
 
-        xml.add_mesh(ply, pos = pos, axangle = axangle, scale = scale, rgba = rgba)
-
-    ## add object to drop after everything else settles
-    ply = random.choice(polygons)
-    rgba = sample_rgba_from_hsv(*bounds['hsv'])
-    scale = utils.uniform(*bounds['scale'])
-    drop_name = xml.add_mesh(ply, pos = [0,0,100], axangle = [1,0,0,0], scale = scale, rgba = rgba)
+        name = xml.add_mesh(ply, pos = pos, axangle = axangle, scale = scale, rgba = rgba)
+        names.append(name)
 
     xml_str = xml.instantiate()
     model = mjc.load_model_from_xml(xml_str)
     sim = mjc.MjSim(model)
-    return sim, xml, drop_name
+    return sim, xml, names
 
 def sample_rgba_from_hsv(*hsv_bounds):
     hsv = utils.uniform(*hsv_bounds)

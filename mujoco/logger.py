@@ -38,6 +38,8 @@ class Logger:
       self.meshes[mesh_name] = mesh_log
       self.masks[mesh_name] = np.zeros( (steps, self.img_dim, self.img_dim, 3) )
 
+  ## ======== UTILS ========
+
   def log_step(self, step):
     self.sim.forward()
     for mesh_name in self.meshes.keys():
@@ -71,7 +73,6 @@ class Logger:
     self.undo_transparent()
     if self.img_dim != self.render_dim:
       image = np.array(Image.fromarray(image).resize(size = (self.img_dim, self.img_dim))).astype(np.uint8)
-      #image = scipy.misc.imresize(image, size = (self.img_dim, self.img_dim)).astype(np.uint8)
 
     if 'images' not in dir(self):
       M, N, C = image.shape
@@ -99,7 +100,6 @@ class Logger:
     image = self.sim.render(self.render_dim, self.render_dim, camera_name = camera)
     if self.img_dim != self.render_dim:
       image = np.array(Image.fromarray(image).resize(size = (self.img_dim, self.img_dim)))
-      # image = scipy.misc.imresize(image, size = (self.img_dim, self.img_dim))
 
     self.albedo[step] = image
 
@@ -195,37 +195,11 @@ class Logger:
 
     self.sim.forward()
 
-  def step(self, steps):
-    for i in range(steps):
-      self.sim.step()
-
-  ## wait till the block on the floor are settled
-  def settle_sim(self, drop_name, min_steps, max_steps, vel_threshold = 0.1):
-    step = 0
-    for _ in range(min_steps):
-      self.settle_step(drop_name)
-      step += 1
-
-    max_vel = np.abs(self.sim.data.qvel).max()
-    while max_vel > vel_threshold:
-      self.settle_step(drop_name)
-
-      max_vel = np.abs(self.sim.data.qvel[:,]).max()
-      step += 1
-      if step > max_steps:
-        break
-    return step
-
-  ## a step of settle_sim
-  def settle_step(self, drop_name):
-    state = self.get_obj_pos(drop_name).copy()
-    vel = self.get_obj_vel(drop_name)
-
-    vel[:] = 0
-    self.sim.forward()
-
+  def step_render(self, render_freq, step):
+    if step % render_freq == 0:
+        self.log(step//render_freq)
+    ## simulate one timestep
     self.sim.step()
-    self.set_obj_pose(drop_name, state)
 
   def get_obj_pos(self, name):
     joint_ind = self.sim.model._joint_name2id[name]
@@ -263,47 +237,8 @@ class Logger:
     else:
       return False
 
-  def hold_drop_execute(self, hold_names, drop_name, steps, logger = None, start_log_step = 0):
-    hold_dict = {}
-    for hold_ind, hold_name in enumerate(hold_names):
-      temp_pos_x = hold_ind * 10
-      temp_pos_z = 10000
-      joint_ind = self.sim.model._joint_name2id[hold_name]
-      qpos_start_ind = joint_ind * 7
-      qpos_end_ind   = (joint_ind+1) * 7
-      qvel_start_ind = joint_ind * 6
-      qvel_end_ind   = (joint_ind+1) * 6
-
-      state = self.sim.data.qpos[qpos_start_ind:qpos_end_ind].copy()
-      vel = self.sim.data.qvel[qvel_start_ind:qvel_end_ind]
-      hold_dict[hold_name] = (qpos_start_ind, qpos_end_ind, qvel_start_ind, qvel_end_ind, state)
-
-      ## set position away from rest of simulation
-      ## and give 0 velocity
-      self.sim.data.qpos[qpos_start_ind+1] = temp_pos_x
-      self.sim.data.qpos[qpos_start_ind+2] = temp_pos_z
-      vel[:] = 0
-
-    while contacts.is_overlapping(self.sim, drop_name):
-        joint_ind = self.sim.model._joint_name2id[drop_name]
-        qpos_start_ind = joint_ind * 7
-
-        self.sim.data.qpos[qpos_start_ind+2] += 0.05
-        self.sim.forward()
-      
-    for i in range(steps):
-      self.sim.forward()
-      self.sim.step()
-      if logger is not None:
-        logger.log(start_log_step + i)
-
-    for hold_name in hold_names:
-      qpos_start_ind, qpos_end_ind, qvel_start_ind, qvel_end_ind, state = hold_dict[hold_name]
-      self.sim.data.qpos[qpos_start_ind:qpos_end_ind] = state
-      self.sim.data.qfrc_constraint[qvel_start_ind:qvel_end_ind] = 0
-      self.sim.data.qvel[qvel_start_ind:qvel_end_ind] = 0
-    self.sim.forward()
-
+  
+    
   def get_logs(self, step = None):
     if step is None:
       if self.albedo_flag:
@@ -322,6 +257,29 @@ class Logger:
       step_image = self.images[step]
       return step_meshes, step_image, step_meshes
 
+  ## ======== PIPELINE FUNCTIONS ========
+  ## wait till the block on the floor are settled
+  def settle_sim(self, min_steps, max_steps, step, render_freq, vel_threshold = 0.1):
+    start_step = step
 
+    for _ in range(min_steps):
+      self.step_render(render_freq, step)
+      step += 1
 
+    
+    max_vel = np.abs(self.sim.data.qvel).max()
+    while max_vel > vel_threshold:
+      self.step_render(render_freq, step)
+      max_vel = np.abs(self.sim.data.qvel[:,]).max()
+      step += 1
+      if step > max_steps + start_step:
+        break
+    return step
+
+  ## drop (free-fall) one object from a given position
+  def drop_obj(self, drop_name, pos, min_steps, max_steps, step, render_freq):
+    self.set_obj_pose(drop_name, pos)
+    self.set_obj_vel(drop_name,vel = [0] * 6)
+    step = self.settle_sim(min_steps, max_steps, step, render_freq)
+    return step
     
