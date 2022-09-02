@@ -65,7 +65,7 @@ class Logger:
 
     return xpos, xaxangle, xvelp, xvelr
 
-  def log_image(self, step, transparent=[], camera='fixed'):
+  def log_image(self, step, transparent=[], camera='cam1'):
     self.make_transparent(transparent)
     image = self.sim.render(self.render_dim, self.render_dim, camera_name = camera)
     self.undo_transparent()
@@ -116,7 +116,7 @@ class Logger:
     self.sim.model.mat_rgba[mat_ind] = rgba
     return old_rgba
 
-  def log_masks(self, step, camera = 'fixed'):
+  def log_masks(self, step, camera = 'cam1'):
     rgba = self.sim.model.mat_rgba.copy()
     spec = self.sim.model.mat_specular.copy()
     emit = self.sim.model.mat_emission.copy()
@@ -167,10 +167,6 @@ class Logger:
     if self.albedo_flag:
       self.log_albedo(step)
 
-  def sample_object(self):
-    mesh_names = list(self.masks.keys())
-    return random.choice( mesh_names )
-
   def make_transparent(self, names):
     self._transparent_dict = {}
     for name in names:
@@ -180,22 +176,6 @@ class Logger:
   def undo_transparent(self):
     for name, rgba in self._transparent_dict.items():
       self.change_rgba(name, rgba)
-
-  def log_embedder(self, step, obj_name):
-    transparent_names = [name for name in self.masks.keys() if name != obj_name]
-    rgba_dict = {}
-    for name in transparent_names:
-      rgba = self.change_rgba(name, [0,0,0,0])
-      rgba_dict[name] = rgba
-    
-    self.log_image(step)
-
-    for name in transparent_names:
-      rgba = rgba_dict[name]
-      self.change_rgba(name, rgba)
-
-    self.log_step(step)
-    self.log_masks(step)
     
   def position_body(self, name, pos, axangle):
     joint_ind = self.sim.model._joint_name2id[name]
@@ -219,6 +199,7 @@ class Logger:
     for i in range(steps):
       self.sim.step()
 
+  ## wait till the block on the floor are settled
   def settle_sim(self, drop_name, min_steps, max_steps, vel_threshold = 0.1):
     step = 0
     for _ in range(min_steps):
@@ -235,34 +216,40 @@ class Logger:
         break
     return step
 
+  ## a step of settle_sim
   def settle_step(self, drop_name):
-    joint_ind = self.sim.model._joint_name2id[drop_name]
-    qpos_start_ind = joint_ind * 7
-    qpos_end_ind   = (joint_ind+1) * 7
-    qvel_start_ind = joint_ind * 6
-    qvel_end_ind   = (joint_ind+1) * 6
-
-    state = self.sim.data.qpos[qpos_start_ind:qpos_end_ind].copy()
-    vel = self.sim.data.qvel[qvel_start_ind:qvel_end_ind]
+    state = self.get_obj_pos(drop_name).copy()
+    vel = self.get_obj_vel(drop_name)
 
     vel[:] = 0
     self.sim.forward()
 
     self.sim.step()
-    self.sim.data.qpos[qpos_start_ind:qpos_end_ind] = state
+    self.set_obj_pose(drop_name, state)
 
-  def remove_tower_overlaps(self, names):
-    num_objects = len(names)
-    for ind in range(1, num_objects):
-      top = names[ind]
-      bottom = names[ind-1]
+  def get_obj_pos(self, name):
+    joint_ind = self.sim.model._joint_name2id[name]
+    qpos_start_ind = joint_ind * 7
+    qpos_end_ind   = (joint_ind+1) * 7
+    return self.sim.data.qpos[qpos_start_ind:qpos_end_ind]
 
-      joint_ind = self.sim.model._joint_name2id[top]
-      qpos_z_ind = (joint_ind * 7) + 2
+  def set_obj_pose(self, name, pos):
+    joint_ind = self.sim.model._joint_name2id[name]
+    qpos_start_ind = joint_ind * 7
+    qpos_end_ind   = (joint_ind+1) * 7
+    self.sim.data.qpos[qpos_start_ind:qpos_end_ind] = pos
 
-      while contacts.are_overlapping(self.sim, bottom, top):
-        self.sim.data.qpos[qpos_z_ind] += 0.01
-        self.sim.forward()
+  def get_obj_vel(self, name):
+    joint_ind = self.sim.model._joint_name2id[name]
+    qvel_start_ind = joint_ind * 6
+    qvel_end_ind   = (joint_ind+1) * 6
+    return self.sim.data.qvel[qvel_start_ind:qvel_end_ind]
+
+  def set_obj_vel(self, name, vel):
+    joint_ind = self.sim.model._joint_name2id[name]
+    qvel_start_ind = joint_ind * 6
+    qvel_end_ind   = (joint_ind+1) * 6
+    self.sim.data.qvel[qvel_start_ind:qvel_end_ind] = vel
 
   def check_stability(self, name, init_pos):
     joint_ind = self.sim.model._joint_name2id[name]
@@ -275,8 +262,6 @@ class Logger:
       return True
     else:
       return False
-
-      
 
   def hold_drop_execute(self, hold_names, drop_name, steps, logger = None, start_log_step = 0):
     hold_dict = {}
@@ -318,56 +303,6 @@ class Logger:
       self.sim.data.qfrc_constraint[qvel_start_ind:qvel_end_ind] = 0
       self.sim.data.qvel[qvel_start_ind:qvel_end_ind] = 0
     self.sim.forward()
-
-  def get_state(self):
-    states = {}
-    for ind, (name, mesh) in enumerate(self.meshes.items()):
-
-      temp_pos_x = ind * 10
-      temp_pos_z = 10000
-      joint_ind = self.sim.model._joint_name2id[name]
-      qpos_start_ind = joint_ind * 7
-      qpos_end_ind   = (joint_ind+1) * 7
-
-      state = self.sim.data.qpos[qpos_start_ind:qpos_end_ind].copy()
-
-      states[name] = {'ply': mesh['ply'], 'qpos': state, 'scale': mesh['xscale'][0][0], 'rgba': mesh['xrgba'][0].tolist()}
-
-    return states
-
-
-  def hold_drop(self, hold_names, steps):
-    hold_dict = {}
-    for hold_ind, hold_name in enumerate(hold_names):
-      temp_pos_x = hold_ind * 10
-      temp_pos_z = 10000
-      joint_ind = self.sim.model._joint_name2id[hold_name]
-      qpos_start_ind = joint_ind * 7
-      qpos_end_ind   = (joint_ind+1) * 7
-      qvel_start_ind = joint_ind * 6
-      qvel_end_ind   = (joint_ind+1) * 6
-
-      state = self.sim.data.qpos[qpos_start_ind:qpos_end_ind].copy()
-      vel = self.sim.data.qvel[qvel_start_ind:qvel_end_ind]
-      hold_dict[hold_name] = (qpos_start_ind, qpos_end_ind, qvel_start_ind, qvel_end_ind, state)
-
-      ## set position away from rest of simulation
-      ## and give 0 velocity
-      self.sim.data.qpos[qpos_start_ind+1] = temp_pos_x
-      self.sim.data.qpos[qpos_start_ind+2] = temp_pos_z
-      vel[:] = 0
-
-    for i in range(steps):
-      self.sim.forward()
-      self.sim.step()
-
-    for hold_name in hold_names:
-      qpos_start_ind, qpos_end_ind, qvel_start_ind, qvel_end_ind, state = hold_dict[hold_name]
-      self.sim.data.qpos[qpos_start_ind:qpos_end_ind] = state
-      self.sim.data.qfrc_constraint[qvel_start_ind:qvel_end_ind] = 0
-      self.sim.data.qvel[qvel_start_ind:qvel_end_ind] = 0
-    self.sim.forward()
-
 
   def get_logs(self, step = None):
     if step is None:

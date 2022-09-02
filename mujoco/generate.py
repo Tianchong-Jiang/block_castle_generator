@@ -5,6 +5,8 @@ import math
 import random
 import tqdm
 import pdb
+import imageio
+import numpy as np
 
 import mujoco_py as mjc
 import matplotlib.pyplot as plt
@@ -18,9 +20,9 @@ parser = argparse.ArgumentParser()
 ## stuff you might want to edit
 parser.add_argument('--start', default=0, type=int, 
         help='starting index (useful if rendering in parallel jobs)')
-parser.add_argument('--num_images', default=5, type=int,
-        help='total number of images to render')
-parser.add_argument('--img_dim', default=256, type=int,
+parser.add_argument('--num_images', default=1, type=int,
+        help='total number of scenes to render')
+parser.add_argument('--img_dim', default=640, type=int,
         help='image dimension')
 parser.add_argument('--output_path', default='rendered/test/', type=str,
         help='path to save images')
@@ -34,6 +36,11 @@ parser.add_argument('--min_objects', default=4, type=int,
         help='min number of objects *starting on the ground*')
 parser.add_argument('--max_objects', default=4, type=int,
         help='max number of objects *starting on the ground*')
+
+## stuff about outputting video/gif
+parser.add_argument('--save_gif', default=True, type=bool,
+        help='if true, saves images as gif')
+
 
 ## stuff you probably don't need to edit
 parser.add_argument('--settle_steps_min', default=2000, type=int,
@@ -125,20 +132,15 @@ for img_num in tqdm.tqdm( range(args.start, end) ):
         for timestep in range( images.shape[0] ):
             plt.imsave( os.path.join(args.output_path, '{}_{}.png'.format(img_num, timestep)), images[timestep] / 255. )
 
+    if args.save_gif:
+        images_uint8 = images.astype(np.uint8)
+        imageio.mimsave(os.path.join(args.output_path, '{}.gif'.format(img_num)), images_uint8)
+
     config_path  = os.path.join( args.output_path, '{}.p'.format(img_num) )
 
     config = {'data': data, 'images': images, 'masks': masks, 'drop_name': drop_name}
 
     pickle.dump( config, open(config_path, 'wb') )
-
-
-
-
-
-
-
-
-
 
 
 
