@@ -54,7 +54,7 @@ parser.add_argument('--save_images', default=True, type=bool,
 args = parser.parse_args()
 
 
-polygons = ['cube', 'horizontal_rectangle', 'tetrahedron'] 
+polygons = ['cube', 'horizontal_rectangle', 'rectangle', 'cylinder'] 
 
 num_objects = range(args.min_objects, args.max_objects + 1)
 
@@ -83,7 +83,7 @@ metadata = {'polygons': polygons, 'max_steps_per_drop': args.drop_steps_max,
 pickle.dump( metadata, open(os.path.join(args.output_path, 'metadata.p'), 'wb') )
 
 # number of frames rendered in total for a scene
-num_images_per_scene = math.ceil(args.settle_steps_max * 2 / args.render_freq + 1)
+num_images_per_scene = math.ceil(args.settle_steps_max * (1 + args.max_objects) / args.render_freq + 1)
 end = args.start + args.num_images
 for img_num in tqdm.tqdm( range(args.start, end) ):
 
@@ -98,8 +98,7 @@ for img_num in tqdm.tqdm( range(args.start, end) ):
     ## drop all objects to the preparing table
     step = logger.settle_sim(args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
 
-    drop_name = random.choice(names)
-    step = logger.drop_obj(drop_name, [0,0,5,0,0,0,0], args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
+    logger.drop_obj_random(names, args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
     
     data, images, masks = logger.get_logs()
 

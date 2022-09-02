@@ -236,8 +236,6 @@ class Logger:
       return True
     else:
       return False
-
-  
     
   def get_logs(self, step = None):
     if step is None:
@@ -281,5 +279,27 @@ class Logger:
     self.set_obj_pose(drop_name, pos)
     self.set_obj_vel(drop_name,vel = [0] * 6)
     step = self.settle_sim(min_steps, max_steps, step, render_freq)
+    return step
+
+  def drop_obj_random(self, drop_names, min_steps, max_steps, step, render_freq):
+    drop_num = len(drop_names)
+    
+    ## drop the first object at the center of the table
+    step = self.drop_obj(drop_names[0], [0,0,5,0,0,0,0], min_steps, max_steps, step, render_freq)
+    for i in range(1, drop_num):
+
+      ## choose an already settled  block as the center of the Gaussian
+      target = random.randint(0, i)
+      name = drop_names[target]
+      center = self.get_obj_pos(name)
+      pos = [0] * 7
+      if target == i:
+        pos[0] = random.gauss(0, 1)
+        pos[1] = random.gauss(0, 1)
+      else:
+        pos[0] = random.gauss(center[0], 0.25)
+        pos[1] = random.gauss(center[1], 0.25)
+      pos[2] = 5
+      step = self.drop_obj(drop_names[i], pos, min_steps, max_steps, step, render_freq)
     return step
     
