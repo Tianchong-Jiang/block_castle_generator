@@ -11,12 +11,15 @@ def sample_settled(asset_path, num_objects, polygons, bounds, spacing = 1):
     xml = XML(asset_path)
     num_set = max(num_objects)
     names = []
-
+    
+    # routin to add meshes to xml file
     for obj_num in range(num_set):
         ply = random.choice(polygons)
 
-        pos = utils.uniform(*bounds['pos'])
-        pos[-1] = spacing * (obj_num)
+        # hard-coded, to drop 10 objects on the preparing table
+        pos = [4 * obj_num - 18, 30, 1]
+        # utils.uniform(*bounds['pos'])
+        # pos[-1] = spacing * (obj_num)
 
         if 'horizontal' in ply:
             axis = [1, 0, 0]

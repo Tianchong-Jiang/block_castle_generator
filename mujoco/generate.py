@@ -22,8 +22,10 @@ parser.add_argument('--start', default=0, type=int,
         help='starting index (useful if rendering in parallel jobs)')
 parser.add_argument('--num_images', default=1, type=int,
         help='total number of scenes to render')
-parser.add_argument('--img_dim', default=640, type=int,
-        help='image dimension')
+parser.add_argument('--image_width', default=1280, type=int,
+        help='image width')
+parser.add_argument('--image_height', default=720, type=int,
+        help='image height')
 parser.add_argument('--output_path', default='rendered/test/', type=str,
         help='path to save images')
 
@@ -89,23 +91,33 @@ for img_num in tqdm.tqdm( range(args.start, end) ):
 
     step = 0
 
-    ## initiate the sim and settle the blocks on the first floor
+    ## initiate the sim and settle the blocks on the prepapring table
     sim, xml, names = contacts.sample_settled(asset_path, num_objects, polygons, settle_bounds)
 
     ## initiate the logger, which is used to log data and images
-    logger = Logger(xml, sim, steps = num_images_per_scene, img_dim = args.img_dim )
+    logger = Logger(xml, sim, steps = num_images_per_scene, image_width = args.image_width, image_height = args.image_height)
     
     ## drop all objects to the preparing table
     step = logger.settle_sim(args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
 
+    ## drop the objects randomly to the main table
     logger.drop_obj_random(names, args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
     
     data, images, masks = logger.get_logs()
 
+    ## Save the rendered images
     if args.save_images:
         for timestep in range( images.shape[0] ):
             plt.imsave( os.path.join(args.output_path, '{}_{}.png'.format(img_num, timestep)), images[timestep] / 255. )
 
+    ## save the masks of each object
+    if args.save_images:
+        for timestep in range( images.shape[0] ):
+            mesh_names = logger.masks.keys()
+            for mesh in mesh_names:
+                plt.imsave( os.path.join(args.output_path, '{}_{}_{}.png'.format(img_num, timestep, mesh)), masks[mesh][timestep] / 255. )
+    
+    ## same the rendered images as a gif
     if args.save_gif:
         images_uint8 = images.astype(np.uint8)
         imageio.mimsave(os.path.join(args.output_path, '{}.gif'.format(img_num)), images_uint8)
