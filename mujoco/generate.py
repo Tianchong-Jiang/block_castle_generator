@@ -46,18 +46,19 @@ parser.add_argument('--save_gif', default=False, type=bool,
         help='if true, saves images as gif')
 parser.add_argument('--save_dataset', default=True, type=bool,
         help='if true, saves only the final image and the object mask as part of a dataset')
+parser.add_argument('--save_images', default=False, type=bool,
+        help='if true, saves images as png (alongside pickle files)')
 
 ## stuff you probably don't need to edit
 parser.add_argument('--settle_steps_min', default=2000, type=int,
         help='min number of steps simulating ground objects to rest')
 parser.add_argument('--settle_steps_max', default=2000, type=int,
         help='max number of steps simulating ground objects to rest')
-parser.add_argument('--save_images', default=True, type=bool,
-        help='if true, saves images as png (alongside pickle files)')
+
 args = parser.parse_args()
 
-
 polygons = ['cube', 'horizontal_rectangle', 'rectangle', 'cylinder'] 
+cameras = ['front','left','right','above']
 
 num_objects = range(args.min_objects, args.max_objects + 1)
 
@@ -86,7 +87,7 @@ metadata = {'polygons': polygons, 'max_steps_per_drop': args.drop_steps_max,
 pickle.dump( metadata, open(os.path.join(args.output_path, 'metadata.p'), 'wb') )
 
 # number of frames rendered in total for a scene
-num_images_per_scene = math.ceil(args.settle_steps_max * (1 + args.max_objects) / args.render_freq )
+num_images_per_scene = ( args.settle_steps_max * (1 + args.max_objects) ) // args.render_freq + 1
 end = args.start + args.num_images
 for img_num in tqdm.tqdm( range(args.start, end) ):
 
@@ -97,20 +98,25 @@ for img_num in tqdm.tqdm( range(args.start, end) ):
     sim, xml, names = contacts.sample_settled_fixed(asset_path, num_objects, settle_bounds)
 
     ## initiate the logger, which is used to log data and images
-    logger = Logger(xml, sim, steps = num_images_per_scene, image_width = args.image_width, image_height = args.image_height)
+    logger = Logger(xml, sim, steps = num_images_per_scene, image_width = args.image_width,
+        image_height = args.image_height, cameras = cameras)
     
     ## drop all objects to the preparing table
     step = logger.settle_sim(args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
 
     ## drop the objects randomly to the main table
-    logger.drop_obj_random(names, args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
+    step = logger.drop_obj_random(names, args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
     
     data, images, masks = logger.get_logs()
 
+    print(step)
+
     ## Save the rendered images
     if args.save_images:
-        for timestep in range( images.shape[0] ):
-            plt.imsave( os.path.join(args.output_path, '{}_{}.png'.format(img_num, timestep)), images[timestep] / 255. )
+        for timestep in range( step // args.render_freq):
+            for i in range(len(cameras)):
+                plt.imsave( os.path.join(args.output_path, '{}_{}_{}.png'.format(img_num, timestep, cameras[i])),
+                    images[timestep][i] / 255. )
     
     ## same the rendered images as a gif
     if args.save_gif:
@@ -119,11 +125,14 @@ for img_num in tqdm.tqdm( range(args.start, end) ):
 
     ## save the final image and masks as part of a dataset
     if args.save_dataset:
-        plt.imsave( os.path.join(args.output_path, '{}_dataset.png'.format(img_num)), images[images.shape[0] - 1] / 255. )
+        for i in range(len(cameras)):
+            plt.imsave( os.path.join(args.output_path, '{}_{}.png'.format(img_num, cameras[i])),
+                images[(step - 1) // args.render_freq][i] / 255. )
         ## save the masks of each object
-        mesh_names = logger.masks.keys()
-        for mesh in mesh_names:
-                plt.imsave( os.path.join(args.output_path, '{}_{}.png'.format(img_num, mesh)), masks[mesh][timestep] / 255. )
+            mesh_names = logger.masks.keys()
+            for mesh in mesh_names:
+                plt.imsave( os.path.join(args.output_path, '{}_{}_{}.png'.format(img_num, mesh, cameras[i])),
+                    masks[mesh][(step - 1) // args.render_freq][i] / 255. )
         
     config_path  = os.path.join( args.output_path, '{}.p'.format(img_num) )
 

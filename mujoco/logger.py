@@ -14,7 +14,7 @@ from PIL import Image
 
 class Logger:
 
-  def __init__(self, xml, sim, steps = 100, image_width = 64, image_height = 64, albedo = False):
+  def __init__(self, xml, sim, steps = 100, image_width = 64, image_height = 64, albedo = False, cameras = []):
     self.sim = sim
     self.steps = steps
     self.image_width = image_width
@@ -38,7 +38,7 @@ class Logger:
       mesh_log['xrgba'][:,:] = mesh['xrgba'][:3]
       mesh_log['ply'] = mesh_name[:-2]
       self.meshes[mesh_name] = mesh_log
-      self.masks[mesh_name] = np.zeros( (steps, self.image_height, self.image_width, 3) )
+      self.masks[mesh_name] = np.zeros( (steps, len(cameras), self.image_height, self.image_width, 3) )
 
   ## ======== UTILS ========
 
@@ -50,7 +50,6 @@ class Logger:
   ## log pos and vel data of a mesh
   def log_mesh(self, mesh_name, step):
     xpos, xaxangle, xvelp, xvelr = self.get_body_data(mesh_name)
-    
     self.meshes[mesh_name]['xpos'][step]  = xpos
     self.meshes[mesh_name]['xaxangle'][step] = xaxangle
     self.meshes[mesh_name]['xvelp'][step] = xvelp
@@ -70,19 +69,19 @@ class Logger:
 
     return xpos, xaxangle, xvelp, xvelr
 
-  def log_image(self, step, transparent=[], camera='front'):
-    self.make_transparent(transparent)
-    image = self.sim.render(self.render_width, self.render_height, camera_name = camera)
-    self.undo_transparent()
-    if self.image_width != self.render_width or self.image_height != self.render_height:
-      image = np.array(Image.fromarray(image).resize(size = (self.image_width, self.image_height))).astype(np.uint8)
+  def log_image(self, step, transparent = [], cameras = ['front','left','right','above']):
+    for i in range(len(cameras)):
+      self.make_transparent(transparent)
+      image = self.sim.render(self.render_width, self.render_height, camera_name = cameras[i])
+      self.undo_transparent()
+      if self.image_width != self.render_width or self.image_height != self.render_height:
+        image = np.array(Image.fromarray(image).resize(size = (self.image_width, self.image_height))).astype(np.uint8)
 
-    if 'images' not in dir(self):
-      M, N, C = image.shape
-      self.images = np.zeros( (self.steps, M, N, C) )
-      self.albedo = np.zeros( (self.steps, M, N, C) )
-    self.images[step] = image
-    return image
+      if 'images' not in dir(self):
+        M, N, C = image.shape
+        self.images = np.zeros( (self.steps, len(cameras), M, N, C) )
+        self.albedo = np.zeros( (self.steps, len(cameras), M, N, C) )
+      self.images[step][i] = image
 
   def log_albedo(self, step, camera = 'fixed'):
     rgba = self.sim.model.mat_rgba.copy()
@@ -119,7 +118,7 @@ class Logger:
     self.sim.model.mat_rgba[mat_ind] = rgba
     return old_rgba
 
-  def log_masks(self, step, camera = 'front'):
+  def log_masks(self, step, cameras = ['front','left','right','above']):
     rgba = self.sim.model.mat_rgba.copy()
     spec = self.sim.model.mat_specular.copy()
     emit = self.sim.model.mat_emission.copy()
@@ -128,21 +127,22 @@ class Logger:
     self.sim.model.mat_specular[:] = 0
     self.sim.model.mat_shininess[:] = 0
 
-    mesh_names = self.masks.keys()
-    for mesh in mesh_names:
-      mesh_ind = self.sim.model._geom_name2id[mesh]
-      mat_ind  = self.sim.model.geom_matid[mesh_ind]
+    for i in range(len(cameras)):
+      mesh_names = self.masks.keys()
+      for mesh in mesh_names:
+        mesh_ind = self.sim.model._geom_name2id[mesh]
+        mat_ind  = self.sim.model.geom_matid[mesh_ind]
 
-      self.sim.model.mat_rgba[:] = [0, 0, 0, 1]
-      self.sim.model.mat_rgba[mat_ind] = [1, 1, 1, 1]
-      self.sim.model.mat_emission[mat_ind] = 1
+        self.sim.model.mat_rgba[:] = [0, 0, 0, 1]
+        self.sim.model.mat_rgba[mat_ind] = [1, 1, 1, 1]
+        self.sim.model.mat_emission[mat_ind] = 1
       
 
-      image = self.sim.render(self.render_width, self.render_height, camera_name = camera)
-      if self.image_width != self.render_width or self.image_height != self.render_height:
-        image = np.array(Image.fromarray(image).resize(size = (self.image_width, self.image_height)))
+        image = self.sim.render(self.render_width, self.render_height, camera_name = cameras[i])
+        if self.image_width != self.render_width or self.image_height != self.render_height:
+          image = np.array(Image.fromarray(image).resize(size = (self.image_width, self.image_height)))
 
-      self.masks[mesh][step] = image # > 0.5
+        self.masks[mesh][step][i] = image # > 0.5
 
     self.sim.model.mat_rgba[:] = rgba
     self.sim.model.mat_specular[:] = spec
@@ -200,7 +200,7 @@ class Logger:
   ## step function that renders at a given interval of steps
   def step_render(self, render_freq, step):
     if step % render_freq == 0:
-        self.log(step//render_freq)
+      self.log(step//render_freq)
     ## simulate one timestep
     self.sim.step()
 
@@ -291,7 +291,7 @@ class Logger:
 
     ## drop the rest of the blocks
     for i in range(1, drop_num):
-      ## choose an already settled  block as the center of the Gaussian
+      ## choose an already settled block as the center of the Gaussian
       target = random.randint(0, i)
       name = drop_names[target]
       center = self.get_obj_pos(name)

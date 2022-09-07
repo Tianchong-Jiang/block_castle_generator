@@ -31,8 +31,8 @@ class XML:
 
    <worldbody>
       <camera name='front' pos='0 10 3' euler='-1.57 0 0' fovy = '57'/>
-      <camera name='right' pos='10 0 3' euler='0 1.57 0'/>
-      <camera name='left' pos='-10 0 3' euler='0 -1.57 0'/>
+      <camera name='left' pos='10 0 3' euler='0 1.57 -1.57'/>
+      <camera name='right' pos='-10 0 3' euler='0 -1.57 1.57'/>
       <camera name='above' pos='0 0 100' euler='0 0 0'/>
       <light diffuse='1.5 1.5 1.5' pos='0 4 4' dir='0 -1 0'/>  
       <light diffuse='1.5 1.5 1.5' pos='0 4 1' dir='0 -1 0'/>  

@@ -14,22 +14,15 @@ def sample_settled_fixed(asset_path, num_objects, bounds):
 
     ## hard-coded polygon instances, to change later
     polygon_instances = [
-        {'name':1, 'category':'cube','rgba':[1,0,0,1]},
-        {'name':2, 'category':'cube','rgba':[0,1,0,1]},
-        {'name':3, 'category':'cube','rgba':[0,0,1,1]},
-        {'name':4, 'category':'rectangle','rgba':[1,0,0,1]},
-        {'name':5, 'category':'rectangle','rgba':[0,1,0,1]},
-        {'name':6, 'category':'rectangle','rgba':[0,0,1,1]},
-        {'name':7, 'category':'cylinder','rgba':[1,0,0,1]},
-        {'name':8, 'category':'cylinder','rgba':[0,1,0,1]},
-        {'name':9, 'category':'horizontal_rectangle','rgba':[0,1,0,1]},
-        {'name':0, 'category':'horizontal_rectangle','rgba':[0,0,1,1]}
+        {'name':0, 'category':'cube','rgba':[1,0,0,1]},
+        {'name':1, 'category':'rectangle','rgba':[0,1,0,1]},
+        {'name':2, 'category':'cylinder','rgba':[0,0,1,1]},
+        {'name':3, 'category':'horizontal_rectangle','rgba':[1,0,1,1]}
     ]
-    
+    random.shuffle(polygon_instances)
+
     # routin to add meshes to xml file
     for obj_num in range(num_set):
-        random.shuffle(polygon_instances)
-
         # hard-coded, to drop 10 objects on the preparing table
         pos = [4 * obj_num - 18, 30, 1]
 
@@ -41,7 +34,6 @@ def sample_settled_fixed(asset_path, num_objects, bounds):
         scale = utils.uniform(*bounds['scale'])
 
         name = xml.add_mesh(polygon_instances[obj_num]['category'], pos = pos, axangle = axangle, scale = scale, rgba = polygon_instances[obj_num]['rgba'])
-        print(name)
         names.append(name)
 
     xml_str = xml.instantiate()
@@ -60,8 +52,6 @@ def sample_settled(asset_path, num_objects, polygons, bounds, spacing = 1):
 
         # hard-coded, to drop 10 objects on the preparing table
         pos = [4 * obj_num - 18, 30, 1]
-        # utils.uniform(*bounds['pos'])
-        # pos[-1] = spacing * (obj_num)
 
         if 'horizontal' in ply:
             axis = [1, 0, 0]
