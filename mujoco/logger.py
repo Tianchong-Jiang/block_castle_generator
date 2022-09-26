@@ -14,9 +14,9 @@ from PIL import Image
 
 class Logger:
 
-  def __init__(self, xml, sim, steps = 100, image_width = 64, image_height = 64, albedo = False, cameras = []):
+  def __init__(self, xml, sim, render_steps = 100, image_width = 64, image_height = 64, albedo = False, cameras = []):
     self.sim = sim
-    self.steps = steps
+    self.render_steps = render_steps
     self.image_width = image_width
     self.image_height = image_height
     self.albedo_flag = albedo
@@ -27,18 +27,18 @@ class Logger:
     for mesh in xml.meshes:
       mesh_name = mesh['name']
       mesh_log = {}
-      mesh_log['xpos']  = np.zeros( (steps, 3) )
-      mesh_log['xaxangle'] = np.zeros( (steps, 4) )
-      mesh_log['xvelp'] = np.zeros( (steps, 3) )
-      mesh_log['xvelr'] = np.zeros( (steps, 3) )
+      mesh_log['xpos']  = np.zeros( (render_steps, 3) )
+      mesh_log['xaxangle'] = np.zeros( (render_steps, 4) )
+      mesh_log['xvelp'] = np.zeros( (render_steps, 3) )
+      mesh_log['xvelr'] = np.zeros( (render_steps, 3) )
 
-      mesh_log['xscale'] = np.zeros( (steps, 1) )
-      mesh_log['xrgba'] = np.zeros( (steps, 3) )
+      mesh_log['xscale'] = np.zeros( (render_steps, 1) )
+      mesh_log['xrgba'] = np.zeros( (render_steps, 3) )
       mesh_log['xscale'][:,:] = mesh['xscale'] 
       mesh_log['xrgba'][:,:] = mesh['xrgba'][:3]
       mesh_log['ply'] = mesh_name[:-2]
       self.meshes[mesh_name] = mesh_log
-      self.masks[mesh_name] = np.zeros( (steps, len(cameras), self.image_height, self.image_width, 3) )
+      self.masks[mesh_name] = np.zeros( (render_steps, len(cameras), self.image_height, self.image_width, 3) )
 
   ## ======== UTILS ========
 
@@ -79,8 +79,8 @@ class Logger:
 
       if 'images' not in dir(self):
         M, N, C = image.shape
-        self.images = np.zeros( (self.steps, len(cameras), M, N, C) )
-        self.albedo = np.zeros( (self.steps, len(cameras), M, N, C) )
+        self.images = np.zeros( (self.render_steps, len(cameras), M, N, C) )
+        self.albedo = np.zeros( (self.render_steps, len(cameras), M, N, C) )
       self.images[step][i] = image
 
   def log_albedo(self, step, camera = 'fixed'):

@@ -87,7 +87,7 @@ metadata = {'polygons': polygons, 'max_steps_per_drop': args.drop_steps_max,
 pickle.dump( metadata, open(os.path.join(args.output_path, 'metadata.p'), 'wb') )
 
 # number of frames rendered in total for a scene
-num_images_per_scene = ( args.settle_steps_max * (1 + args.max_objects) ) // args.render_freq + 1
+num_images_per_scene = ( args.settle_steps_max * (1 + 1 + args.max_objects) ) // args.render_freq + 1
 end = args.start + args.num_images
 for img_num in tqdm.tqdm( range(args.start, end) ):
 
@@ -98,7 +98,7 @@ for img_num in tqdm.tqdm( range(args.start, end) ):
     sim, xml, names = contacts.sample_settled_fixed(asset_path, num_objects, settle_bounds)
 
     ## initiate the logger, which is used to log data and images
-    logger = Logger(xml, sim, steps = num_images_per_scene, image_width = args.image_width,
+    logger = Logger(xml, sim, render_steps = num_images_per_scene, image_width = args.image_width,
         image_height = args.image_height, cameras = cameras)
     
     ## drop all objects to the preparing table
@@ -107,9 +107,10 @@ for img_num in tqdm.tqdm( range(args.start, end) ):
     ## drop the objects randomly to the main table
     step = logger.drop_obj_random(names, args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
     
-    data, images, masks = logger.get_logs()
+    ## wait for all the objects to be settled
+    step = logger.settle_sim(args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
 
-    print(step)
+    data, images, masks = logger.get_logs()
 
     ## Save the rendered images
     if args.save_images:
@@ -132,8 +133,17 @@ for img_num in tqdm.tqdm( range(args.start, end) ):
             mesh_names = logger.masks.keys()
             for mesh in mesh_names:
                 plt.imsave( os.path.join(args.output_path, '{}_{}_{}.png'.format(img_num, mesh, cameras[i])),
-                    masks[mesh][(step - 1) // args.render_freq][i] / 255. )
-        
+                      np.multiply(masks[mesh][(step - 1) // args.render_freq][i] / 255.,
+                      images[(step - 1) // args.render_freq][i] / 255.))
+
+    ## write object poses to .txt file
+    target_file = open(os.path.join(args.output_path, '{}_poses.txt'.format(img_num)), 'x')
+    for name in names:
+        target_file.write(name + '\n')
+        target_file.write('pos' + np.array2string(data[name]['xpos'][-1]) + '\n')
+        target_file.write('angle' + np.array2string(data[name]['xaxangle'][-1]) + '\n')
+    target_file.close()
+
     config_path  = os.path.join( args.output_path, '{}.p'.format(img_num) )
 
     config = {'data': data, 'images': images, 'masks': masks}
