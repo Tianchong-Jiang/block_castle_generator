@@ -162,10 +162,10 @@ class Logger:
       xml_new.add_mesh(polygon, scale = scale, pos = pos, axangle = axangle, rgba = rgba, name = mesh_name)
     return xml_new
 
-  def log(self, step, transparent=[]):
+  def log(self, step, cameras, transparent=[]):
     self.log_step(step)
-    self.log_image(step, transparent=transparent)
-    self.log_masks(step)
+    self.log_image(step, transparent=transparent, cameras=cameras)
+    self.log_masks(step, cameras=cameras)
     if self.albedo_flag:
       self.log_albedo(step)
 
@@ -198,9 +198,9 @@ class Logger:
     self.sim.forward()
 
   ## step function that renders at a given interval of steps
-  def step_render(self, render_freq, step):
+  def step_render(self, render_freq, step, cameras):
     if step % render_freq == 0:
-      self.log(step//render_freq)
+      self.log(step//render_freq, cameras=cameras)
     ## simulate one timestep
     self.sim.step()
 
@@ -260,16 +260,16 @@ class Logger:
 
   ## ======== PIPELINE FUNCTIONS ========
   ## wait till the block on the floor are settled
-  def settle_sim(self, min_steps, max_steps, step, render_freq, vel_threshold = 0.1):
+  def settle_sim(self, min_steps, max_steps, step, render_freq, cameras, vel_threshold = 0.1):
     start_step = step
 
     for _ in range(min_steps):
-      self.step_render(render_freq, step)
+      self.step_render(render_freq, step, cameras=cameras)
       step += 1
 
     max_vel = np.abs(self.sim.data.qvel).max()
     while max_vel > vel_threshold:
-      self.step_render(render_freq, step)
+      self.step_render(render_freq, step, cameras=cameras)
       max_vel = np.abs(self.sim.data.qvel[:,]).max()
       step += 1
       if step > max_steps + start_step:
@@ -277,17 +277,17 @@ class Logger:
     return step
 
   ## drop (free-fall) one object from a given position
-  def drop_obj(self, drop_name, pos, min_steps, max_steps, step, render_freq):
+  def drop_obj(self, drop_name, pos, min_steps, max_steps, step, render_freq, cameras):
     self.set_obj_pose(drop_name, pos)
     self.set_obj_vel(drop_name,vel = [0] * 6)
-    step = self.settle_sim(min_steps, max_steps, step, render_freq)
+    step = self.settle_sim(min_steps, max_steps, step, render_freq, cameras)
     return step
 
-  def drop_obj_random(self, drop_names, min_steps, max_steps, step, render_freq):
+  def drop_obj_random(self, drop_names, min_steps, max_steps, step, render_freq, cameras):
     drop_num = len(drop_names)
     
     ## drop the first object at the center of the table
-    step = self.drop_obj(drop_names[0], [0,0,5,0,0,0,0], min_steps, max_steps, step, render_freq)
+    step = self.drop_obj(drop_names[0], [0,0,5,0,0,0,0], min_steps, max_steps, step, render_freq, cameras)
 
     ## drop the rest of the blocks
     for i in range(1, drop_num):
@@ -303,6 +303,6 @@ class Logger:
         pos[0] = random.gauss(center[0], 0.1)
         pos[1] = random.gauss(center[1], 0.1)
       pos[2] = 5
-      step = self.drop_obj(drop_names[i], pos, min_steps, max_steps, step, render_freq)
+      step = self.drop_obj(drop_names[i], pos, min_steps, max_steps, step, render_freq, cameras)
     return step
     

@@ -7,6 +7,9 @@ import tqdm
 import pdb
 import imageio
 import numpy as np
+import sys
+
+sys.path.append('/root/proj-block-pose-estimation/data_generation')
 
 import mujoco_py as mjc
 import matplotlib.pyplot as plt
@@ -48,6 +51,8 @@ parser.add_argument('--save_dataset', default=True, type=bool,
         help='if true, saves only the final image and the object mask as part of a dataset')
 parser.add_argument('--save_images', default=False, type=bool,
         help='if true, saves images as png (alongside pickle files)')
+parser.add_argument('--save_final', default=False, type=bool,
+        help='if true, saves the final images for all cameras')
 
 ## stuff you probably don't need to edit
 parser.add_argument('--settle_steps_min', default=2000, type=int,
@@ -58,7 +63,7 @@ parser.add_argument('--settle_steps_max', default=2000, type=int,
 args = parser.parse_args()
 
 polygons = ['cube', 'horizontal_rectangle', 'rectangle', 'cylinder'] 
-cameras = ['front','left','right','above']
+cameras = ['front','left','right']#,'above']
 
 num_objects = range(args.min_objects, args.max_objects + 1)
 
@@ -102,13 +107,13 @@ for img_num in tqdm.tqdm( range(args.start, end) ):
         image_height = args.image_height, cameras = cameras)
     
     ## drop all objects to the preparing table
-    step = logger.settle_sim(args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
+    step = logger.settle_sim(args.settle_steps_min, args.settle_steps_max, step, args.render_freq, cameras)
 
     ## drop the objects randomly to the main table
-    step = logger.drop_obj_random(names, args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
+    step = logger.drop_obj_random(names, args.settle_steps_min, args.settle_steps_max, step, args.render_freq, cameras)
     
     ## wait for all the objects to be settled
-    step = logger.settle_sim(args.settle_steps_min, args.settle_steps_max, step, args.render_freq)
+    step = logger.settle_sim(args.settle_steps_min, args.settle_steps_max, step, args.render_freq, cameras)
 
     data, images, masks = logger.get_logs()
 
@@ -124,24 +129,28 @@ for img_num in tqdm.tqdm( range(args.start, end) ):
         images_uint8 = images.astype(np.uint8)
         imageio.mimsave(os.path.join(args.output_path, '{}.gif'.format(img_num)), images_uint8)
 
-    ## save the final image and masks as part of a dataset
-    if args.save_dataset:
+    ## save the final images
+    if args.save_final:
         for i in range(len(cameras)):
             plt.imsave( os.path.join(args.output_path, '{}_{}.png'.format(img_num, cameras[i])),
                 images[(step - 1) // args.render_freq][i] / 255. )
-        ## save the masks of each object
-            mesh_names = logger.masks.keys()
-            for mesh in mesh_names:
-                plt.imsave( os.path.join(args.output_path, '{}_{}_{}.png'.format(img_num, mesh, cameras[i])),
-                      np.multiply(masks[mesh][(step - 1) // args.render_freq][i] / 255.,
+
+    ## save the masked images of each object as part of a dataset
+    if args.save_dataset:
+        for i in range(len(cameras)):
+            for j in range(len(names)):
+                name = names[j]
+                plt.imsave(os.path.join(args.output_path, '{}_{}_{}_{}.png'.format(img_num, j, name, cameras[i])),
+                      np.multiply(masks[name][(step - 1) // args.render_freq][i] / 255.,
                       images[(step - 1) // args.render_freq][i] / 255.))
 
     ## write object poses to .txt file
-    target_file = open(os.path.join(args.output_path, '{}_poses.txt'.format(img_num)), 'x')
-    for name in names:
-        target_file.write(name + '\n')
-        target_file.write('pos' + np.array2string(data[name]['xpos'][-1]) + '\n')
-        target_file.write('angle' + np.array2string(data[name]['xaxangle'][-1]) + '\n')
+    target_file = open(os.path.join(args.output_path, 'poses.txt'.format(img_num)), 'a+')
+    for j in range(len(names)):
+        name = names[j]
+        target_file.write('{}_{}_{}.txt'.format(img_num, j, name) + ' '
+            + ' '.join(map(str, data[name]['xpos'][-1])) + ' '
+            + ' '.join(map(str, data[name]['xaxangle'][-1])) + '\n')
     target_file.close()
 
     config_path  = os.path.join( args.output_path, '{}.p'.format(img_num) )
